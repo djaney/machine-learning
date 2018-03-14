@@ -8,3 +8,8 @@ def get_google_file(google_id):
 	filename = '.data_cache/'+get_valid_filename(url)
 	urllib.request.urlretrieve(url, filename)
 	return filename
+
+def get_file(url):
+	filename = '.data_cache/'+get_valid_filename(url)
+	urllib.request.urlretrieve(url, filename)
+	return filename
