@@ -14,6 +14,7 @@ parser.add_argument('-m','--model')
 TOKENS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-!:()\",.? \n\t"
 TOKEN_SIZE = len(TOKENS)
 SEQ_LEN = 100
+BATCH_SIZE = 100
 char_to_int = dict((c, i) for i, c in enumerate(TOKENS))
 int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
 
@@ -25,11 +26,30 @@ def value_to_char(value):
 
 
 
-def generator(path,size):
+def generator(path, batch_size):
 	with open(path,'r') as f:
+		data_buffer = ''
+		x_buffer = []
+		y_buffer = []
 		while True:
-			line = f.readline() + "\n"
-			# code here
+			line = f.readline()
+			if not line: break
+			data_buffer = data_buffer + line
+			data_buffer = ''.join([c for c in data_buffer if c in char_to_int])
+			#flush, +1 to include forcasted character
+			if len(data_buffer) > SEQ_LEN+1:
+				data = data_buffer[0:SEQ_LEN+1]
+				data_buffer = data_buffer[SEQ_LEN+1:]
+				# data = [char_to_value(c) for c  in data]
+				# data = [to_categorical(c,TOKEN_SIZE) for c  in data]
+				x_buffer.append(data[0:-1])
+				y_buffer.append(data[1:])
+				if len(x_buffer) >= batch_size:
+					x = x_buffer
+					y = y_buffer
+					x_buffer = []
+					y_buffer = []
+					yield x,y # no need to reset since they automatically reset
 
 
 
@@ -55,8 +75,10 @@ def _main(args):
 		if args.model is None:
 			parser.error('model required')
 		model_path = get_file(args.data)
-		model = create_model()
-		model.fit_generator(generator(model_path, 100),steps_per_epoch=100)
+		for i in generator(model_path,SEQ_LEN):
+			print(i)
+		# model = create_model()
+		# model.fit_generator(generator(model_path,BATCH_SIZE),steps_per_epoch=1000)
 	return 0
 
 sys.exit(_main(parser.parse_args()))
