@@ -38,6 +38,7 @@ class Checkpoint(Callback):
 	def __init__(self, path, prod_model):
 		self.path = path
 		self.time = time.time()
+		self.time_quick = time.time()
 		self.prod_model = prod_model
 	def on_epoch_end(self, acc, loss):
 		self.model.reset_states()
@@ -46,8 +47,13 @@ class Checkpoint(Callback):
 		self.epoch = epoch
 	def on_batch_end(self, batch, logs={}):
 		elapsed = math.floor(time.time() - self.time)
+		elapsed_quick = math.floor(time.time() - self.time_quick)
 		self.prod_model.set_weights(self.model.get_weights())
 		self.prod_model.save('{}'.format(self.path))
+
+		if elapsed_quick > 10:
+			self.prod_model.save('{}'.format(self.path))
+			self.time_quick = time.time()
 		if elapsed > 1600: # save every 30 minutes
 			self.time = time.time()
 			# transfer training weights to saved model
