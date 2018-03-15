@@ -35,9 +35,10 @@ int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
 
 
 class Checkpoint(Callback):
-	def __init__(self, path):
+	def __init__(self, path, prod_model):
 		self.path = path
 		self.time = time.time()
+		self.prod_model = prod_model
 	def on_epoch_end(self, acc, loss):
 		self.model.reset_states()
 		print('States cleared')
@@ -47,7 +48,9 @@ class Checkpoint(Callback):
 		elapsed = math.floor(time.time() - self.time)
 		if elapsed > 1800: # save every 30 minutes
 			self.time = time.time()
-			self.model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
+			# transfer training weights to saved model
+			self.prod_model.set_weights(self.model.get_weights())
+			self.prod_model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
 
 def char_to_value(char):
     return char_to_int[char]
@@ -124,7 +127,9 @@ def play(model_path, seed, length):
 		trimmed = [char_to_value(x) for x in trimmed]
 		trimmed = pad_sequences([trimmed],maxlen=SEQ_LEN)
 		trimmed = to_categorical(trimmed,TOKEN_SIZE)
-		out = np.argmax(model.predict(trimmed))
+		trimmed = np.resize(trimmed, (1,SEQ_LEN,TOKEN_SIZE))
+		pred = model.predict(trimmed,batch_size=1).flatten()
+		out = np.argmax(pred)
 		char = value_to_char(out)
 		words = words + char
 	model.reset_states()
@@ -138,10 +143,17 @@ def _main(args):
 		steps_per_epochs = args.steps_per_epochs
 		batch_size = args.batch_size
 
+		# also create prod_model with batch size 1 for production
 		if args.continuation and os.path.exists(args.model):
-			model = load_model(args.model)
+			# get weights from saved model and apply to newly created model
+			weights = load_model(args.model).get_weights()
+			model = create_model(args.internal_size,args.model_depth, batch_size)
+			prod_model = create_model(args.internal_size,args.model_depth, 1)
+			model.set_weights(weights)
 		else:
 			model = create_model(args.internal_size,args.model_depth, batch_size)
+			prod_model = create_model(args.internal_size,args.model_depth, 1)
+
 		size = get_file_size(data_path)
 		max_epoch = math.floor(size / SEQ_LEN / batch_size)
 		
@@ -152,7 +164,7 @@ def _main(args):
 			os.remove(f)
 
 		# instantiate checkpoint callback
-		saver = Checkpoint(args.model)
+		saver = Checkpoint(args.model,prod_model)
 		model.fit_generator(data_generator(data_path,batch_size),
 			steps_per_epoch=steps_per_epochs, 
 			shuffle=False, 
