@@ -11,6 +11,7 @@ import numpy as np
 import math
 import os
 import glob
+import time
 
 parser = argparse.ArgumentParser(description='Generate stuff.')
 parser.add_argument('command')
@@ -36,16 +37,17 @@ int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
 class Checkpoint(Callback):
 	def __init__(self, path):
 		self.path = path
-		self.counter = 0
+		self.time = time.time()
 	def on_epoch_end(self, acc, loss):
 		self.model.reset_states()
 		print('States cleared')
 	def on_epoch_begin(self, epoch, logs={}):
 		self.epoch = epoch
 	def on_batch_end(self, batch, logs={}):
-		if 0 == self.counter % 5000:
+		elapsed = math.floor(time.time() - self.time)
+		if elapsed > 1800: # save every 30 minutes
+			self.time = time.time()
 			self.model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
-		self.counter = self.counter + 1
 
 def char_to_value(char):
     return char_to_int[char]
@@ -145,7 +147,7 @@ def _main(args):
 		if steps_per_epochs > max_epoch or steps_per_epochs < 0: steps_per_epochs = max_epoch
 
 		# remove checkpoints
-		for f in glob.glob(args.model+".batch*.h5"):
+		for f in glob.glob(args.model+".*.h5"):
 			os.remove(f)
 
 		# instantiate checkpoint callback
