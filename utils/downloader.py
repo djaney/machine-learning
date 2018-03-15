@@ -1,5 +1,6 @@
 import urllib.request
 import re
+import os
 def get_valid_filename(s):
     s = str(s).strip().replace(' ', '_')
     return re.sub(r'(?u)[^-\w.]', '', s)
@@ -11,5 +12,9 @@ def get_google_file(google_id):
 
 def get_file(url):
 	filename = '.data_cache/'+get_valid_filename(url)
-	urllib.request.urlretrieve(url, filename)
+	if not os.path.exists(filename):
+		try:
+			urllib.request.urlretrieve(url, filename)
+		except:
+			filename = url
 	return filename

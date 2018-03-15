@@ -2,10 +2,11 @@
 import sys
 import argparse
 from utils.downloader import get_file
-from keras.models import Sequential
+from keras.models import Sequential,load_model
 from keras.layers import LSTM, Dense, Activation, LeakyReLU
 from keras.utils.np_utils import to_categorical
 from keras.callbacks import Callback
+from keras.preprocessing.sequence import pad_sequences
 import numpy as np
 import math
 import os
@@ -13,11 +14,16 @@ import glob
 
 parser = argparse.ArgumentParser(description='Generate stuff.')
 parser.add_argument('command')
+parser.add_argument('model')
 parser.add_argument('-d','--data')
-parser.add_argument('-m','--model')
 parser.add_argument('-s','--steps_per_epochs', default=-1, type=int)
 parser.add_argument('-b','--batch_size', default=500, type=int)
 parser.add_argument('-e','--epochs', default=1, type=int)
+parser.add_argument('--internal_size', default=512, type=int)
+parser.add_argument('--model_depth', default=1, type=int)
+parser.add_argument('--seed', default="A")
+parser.add_argument('--length', default=1000, type=int)
+parser.add_argument('--continuation', default=False, type=bool)
 
 TOKENS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-!:()\",.? \n\t"
 TOKEN_SIZE = len(TOKENS)
@@ -30,8 +36,10 @@ int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
 class Checkpoint(Callback):
 	def __init__(self, path):
 		self.path = path
+	def on_epoch_begin(self, epoch, logs={}):
+		self.epoch = epoch
 	def on_batch_end(self, batch, logs={}):
-		self.model.save('{}.batch-{:010d}.h5'.format(self.path,batch))
+		self.model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
 
 def char_to_value(char):
     return char_to_int[char]
@@ -50,11 +58,11 @@ def get_file_size(path):
 	return size
 
 def data_generator(path, batch_size):
+	data_buffer = ''
+	x_buffer = []
+	y_buffer = []
 	while True:
 		with open(path,'r') as f:
-			data_buffer = ''
-			x_buffer = []
-			y_buffer = []
 			while True:
 				line = f.readline()
 				if not line: break
@@ -73,38 +81,54 @@ def data_generator(path, batch_size):
 						y = y_buffer
 						x_buffer = []
 						y_buffer = []
-						yield np.array(x),np.array(y) # no need to reset since they automatically reset
+						yield np.array(x),np.array(y)
 
 
 
 
-def create_model():
+def create_model(internal_size,model_depth):
 
 	model = Sequential()
-	model.add(LSTM(256,input_shape=(SEQ_LEN, TOKEN_SIZE), dropout=0.2, return_sequences=True))
-	model.add(LeakyReLU(alpha=0.3))
-	model.add(LSTM(256, dropout=0.2, return_sequences=False))
-	model.add(LeakyReLU(alpha=0.3))
+
+	for i in range(model_depth):
+		return_sequences = False if i == model_depth-1 else True
+		if i == 0:
+			model.add(LSTM(internal_size,input_shape=(SEQ_LEN, TOKEN_SIZE), dropout=0.2, return_sequences=return_sequences))
+			model.add(LeakyReLU(alpha=0.3))
+		else:
+			model.add(LSTM(internal_size, dropout=0.2, return_sequences=return_sequences))
+			model.add(LeakyReLU(alpha=0.3))
 	model.add(Dense(TOKEN_SIZE, activation='softmax'))
 	#adam optimizer
 	model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 	return model
 
+def play(model_path, seed, length):
+	model = load_model(model_path)
 
-
+	words = ''.join([s for s in seed if s in char_to_int]) # start with a capital letter
+	for _ in range(length):
+		trimmed = words[-SEQ_LEN:]
+		trimmed = [char_to_value(x) for x in trimmed]
+		trimmed = pad_sequences([trimmed],maxlen=SEQ_LEN)
+		trimmed = to_categorical(trimmed,TOKEN_SIZE)
+		out = np.argmax(model.predict(trimmed))
+		char = value_to_char(out)
+		words = words + char
+	print(words)
 def _main(args):
 	if 'train' == args.command:
 		if args.data is None:
 			parser.error('training data required')
-		if args.model is None:
-			parser.error('model required')
 		data_path = get_file(args.data)
 
 		steps_per_epochs = args.steps_per_epochs
 		batch_size = args.batch_size
 
-
-		model = create_model()
+		if args.continuation and os.path.exists(args.model):
+			model = load_model(args.model)
+		else:
+			model = create_model(args.internal_size,args.model_depth)
 		size = get_file_size(data_path)
 		max_epoch = math.floor(size / SEQ_LEN / batch_size)
 		
@@ -122,6 +146,8 @@ def _main(args):
 			epochs=args.epochs, 
 			callbacks=[saver])
 		model.save(args.model)
+	elif 'play' == args.command:
+		play(args.model, args.seed, args.length)
 
 	return 0
 
