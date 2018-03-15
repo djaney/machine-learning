@@ -127,6 +127,7 @@ def play(model_path, seed, length):
 		out = np.argmax(model.predict(trimmed))
 		char = value_to_char(out)
 		words = words + char
+	model.reset_states()
 	print(words)
 def _main(args):
 	if 'train' == args.command:
