@@ -36,10 +36,15 @@ int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
 class Checkpoint(Callback):
 	def __init__(self, path):
 		self.path = path
+		self.counter = 0
+	def on_epoch_end(self, acc, loss):
+		self.model.reset_states()
 	def on_epoch_begin(self, epoch, logs={}):
 		self.epoch = epoch
 	def on_batch_end(self, batch, logs={}):
-		self.model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
+		if 0 == self.counter % 5000:
+			self.model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
+		self.counter = self.counter + 1
 
 def char_to_value(char):
     return char_to_int[char]
@@ -86,17 +91,21 @@ def data_generator(path, batch_size):
 
 
 
-def create_model(internal_size,model_depth):
+def create_model(internal_size,model_depth, batch_size):
 
 	model = Sequential()
 
 	for i in range(model_depth):
 		return_sequences = False if i == model_depth-1 else True
 		if i == 0:
-			model.add(LSTM(internal_size,input_shape=(SEQ_LEN, TOKEN_SIZE), dropout=0.2, return_sequences=return_sequences))
+			model.add(LSTM(internal_size,
+				batch_input_shape=(batch_size,SEQ_LEN, TOKEN_SIZE), 
+				dropout=0.2, 
+				return_sequences=return_sequences, 
+				stateful=True))
 			model.add(LeakyReLU(alpha=0.3))
 		else:
-			model.add(LSTM(internal_size, dropout=0.2, return_sequences=return_sequences))
+			model.add(LSTM(internal_size, dropout=0.2, return_sequences=return_sequences, stateful=True))
 			model.add(LeakyReLU(alpha=0.3))
 	model.add(Dense(TOKEN_SIZE, activation='softmax'))
 	#adam optimizer
@@ -128,7 +137,7 @@ def _main(args):
 		if args.continuation and os.path.exists(args.model):
 			model = load_model(args.model)
 		else:
-			model = create_model(args.internal_size,args.model_depth)
+			model = create_model(args.internal_size,args.model_depth, batch_size)
 		size = get_file_size(data_path)
 		max_epoch = math.floor(size / SEQ_LEN / batch_size)
 		
