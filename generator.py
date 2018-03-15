@@ -129,6 +129,12 @@ def play(model_path, seed, length):
 	model = load_model(model_path)
 
 	words = ''.join([s for s in seed if s in char_to_int]) # start with a capital letter
+	for c in seed[:-1]:
+		c = char_to_value(c)
+		c = to_categorical(c,TOKEN_SIZE)
+		c = np.resize(c, (1,1,TOKEN_SIZE))
+		model.predict(c,batch_size=1)
+
 	for _ in range(length):
 		trimmed = words[-1:]
 		trimmed = [char_to_value(x) for x in trimmed]
