@@ -27,7 +27,7 @@ parser.add_argument('--continuation', default=False, type=bool)
 
 TOKENS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-!:()\",.? \n\t"
 TOKEN_SIZE = len(TOKENS)
-SEQ_LEN = 100
+SEQ_LEN = 1 # because stateful
 BATCH_SIZE = 500
 char_to_int = dict((c, i) for i, c in enumerate(TOKENS))
 int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
@@ -39,6 +39,7 @@ class Checkpoint(Callback):
 		self.counter = 0
 	def on_epoch_end(self, acc, loss):
 		self.model.reset_states()
+		print('States cleared')
 	def on_epoch_begin(self, epoch, logs={}):
 		self.epoch = epoch
 	def on_batch_end(self, batch, logs={}):
