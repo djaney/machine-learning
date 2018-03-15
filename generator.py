@@ -122,7 +122,7 @@ def create_model(internal_size,model_depth, batch_size,seq_len):
 			model.add(LeakyReLU(alpha=0.3))
 	model.add(Dense(TOKEN_SIZE, activation='softmax'))
 	#adam optimizer
-	model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 	return model
 
 def play(model_path, seed, length):
