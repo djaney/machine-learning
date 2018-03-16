@@ -16,3 +16,6 @@ __pycache__/
 !/.graphs/.gitkeep
 /.data_cache/*
 !/.data_cache/.gitkeep
+/donfig/*
+!/config/.gitkeep
+!/config/default.cfg

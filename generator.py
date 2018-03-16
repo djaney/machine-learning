@@ -12,10 +12,11 @@ import math
 import os
 import glob
 import time
+import configparser
 
 parser = argparse.ArgumentParser(description='Generate stuff.')
 parser.add_argument('command')
-parser.add_argument('model')
+parser.add_argument('config')
 parser.add_argument('-d','--data')
 parser.add_argument('-s','--steps_per_epochs', default=-1, type=int)
 parser.add_argument('-b','--batch_size', default=1, type=int)
@@ -26,6 +27,7 @@ parser.add_argument('--sequence_length', default=100, type=int)
 parser.add_argument('--seed', default="A")
 parser.add_argument('--length', default=1000, type=int)
 parser.add_argument('--continuation', default=False, type=bool)
+
 
 TOKENS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-!:()\",.? \n\t"
 TOKEN_SIZE = len(TOKENS)
@@ -148,48 +150,56 @@ def play(model_path, seed, length):
 	model.reset_states()
 	print(words)
 
-def train(args):
-	if args.data is None:
+def train(args, model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth):
+	if data_path is None:
 		parser.error('training data required')
-	data_path = get_file(args.data)
-
-	steps_per_epochs = args.steps_per_epochs
-	batch_size = args.batch_size
-	sequence_length = args.sequence_length
+	data_path = get_file(data_path)
 
 	# also create prod_model with batch size 1 for production
-	if args.continuation and os.path.exists(args.model):
+	if args.continuation and os.path.exists(model_path):
 		# get weights from saved model and apply to newly created model
-		weights = load_model(args.model).get_weights()
-		model = create_model(args.internal_size,args.model_depth, batch_size,sequence_length)
-		prod_model = create_model(args.internal_size,args.model_depth, 1, 1)
+		weights = load_model(model_path).get_weights()
+		model = create_model(internal_size,model_depth, batch_size,sequence_length)
+		prod_model = create_model(internal_size,model_depth, 1, 1)
 		model.set_weights(weights)
 	else:
-		model = create_model(args.internal_size,args.model_depth, batch_size,sequence_length)
-		prod_model = create_model(args.internal_size,args.model_depth, 1, 1)
+		model = create_model(internal_size,model_depth, batch_size,sequence_length)
+		prod_model = create_model(internal_size,model_depth, 1, 1)
 
 	size = get_file_size(data_path)
 	max_epoch = math.floor(size / sequence_length / batch_size)
 	
-	if steps_per_epochs > max_epoch or steps_per_epochs < 0: steps_per_epochs = max_epoch
+	if steps_per_epoch > max_epoch or steps_per_epoch < 0: steps_per_epoch = max_epoch
 
 	# remove checkpoints
-	for f in glob.glob(args.model+".*.h5"):
+	for f in glob.glob(model_path+".*.h5"):
 		os.remove(f)
 
 	# instantiate checkpoint callback
-	saver = Checkpoint(args.model,prod_model)
+	saver = Checkpoint(model_path,prod_model)
 	model.fit_generator(data_generator(data_path,batch_size, sequence_length),
-		steps_per_epoch=steps_per_epochs, 
+		steps_per_epoch=steps_per_epoch, 
 		shuffle=False, 
-		epochs=args.epochs, 
+		epochs=epochs, 
 		callbacks=[saver])
-	model.save(args.model)
+	model.save(model_path)
 def _main(args):
+
+	config = configparser.ConfigParser()
+	config.readfp(open(args.config))
+	model_path = config.get('Default','model')
+	data_path = config.get('Default', 'data');
+	steps_per_epoch = config.getint('Default', 'steps_per_epoch')
+	epochs = config.getint('Default', 'epochs')
+	batch_size = config.getint('Default', 'batch_size')
+	sequence_length = config.getint('Default', 'sequence_length')
+	internal_size = config.getint('Default', 'internal_size')
+	model_depth = config.getint('Default', 'model_depth')
+
 	if 'train' == args.command:
-		train(args)
+		train(args,model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth)
 	elif 'play' == args.command:
-		play(args.model, args.seed, args.length)
+		play(model_path, args.seed, args.length)
 
 	return 0
 
