@@ -26,7 +26,7 @@ parser.add_argument('--model_depth', default=1, type=int)
 parser.add_argument('--sequence_length', default=100, type=int)
 parser.add_argument('--seed', default="A")
 parser.add_argument('--length', default=1000, type=int)
-parser.add_argument('--reset', default=False, type=bool)
+parser.add_argument('--reset', action='store_true')
 
 
 TOKENS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-!:()\",.? \n\t"
@@ -195,6 +195,8 @@ def _main(args):
 	sequence_length = config.getint('Default', 'sequence_length')
 	internal_size = config.getint('Default', 'internal_size')
 	model_depth = config.getint('Default', 'model_depth')
+
+
 	if 'train' == args.command:
 		train(model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth, args.reset)
 	elif 'play' == args.command:
