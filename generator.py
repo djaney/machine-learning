@@ -26,7 +26,7 @@ parser.add_argument('--model_depth', default=1, type=int)
 parser.add_argument('--sequence_length', default=100, type=int)
 parser.add_argument('--seed', default="A")
 parser.add_argument('--length', default=1000, type=int)
-parser.add_argument('--continuation', default=False, type=bool)
+parser.add_argument('--reset', default=False, type=bool)
 
 
 TOKENS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-!:()\",.? \n\t"
@@ -150,13 +150,13 @@ def play(model_path, seed, length):
 	model.reset_states()
 	print(words)
 
-def train(args, model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth):
+def train(model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth, reset):
 	if data_path is None:
 		parser.error('training data required')
 	data_path = get_file(data_path)
 
 	# also create prod_model with batch size 1 for production
-	if args.continuation and os.path.exists(model_path):
+	if not reset and os.path.exists(model_path):
 		# get weights from saved model and apply to newly created model
 		weights = load_model(model_path).get_weights()
 		model = create_model(internal_size,model_depth, batch_size,sequence_length)
@@ -195,9 +195,8 @@ def _main(args):
 	sequence_length = config.getint('Default', 'sequence_length')
 	internal_size = config.getint('Default', 'internal_size')
 	model_depth = config.getint('Default', 'model_depth')
-
 	if 'train' == args.command:
-		train(args,model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth)
+		train(model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth, args.reset)
 	elif 'play' == args.command:
 		play(model_path, args.seed, args.length)
 
