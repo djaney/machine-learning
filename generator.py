@@ -37,11 +37,10 @@ int_to_char = dict((i, c) for i, c in enumerate(TOKENS))
 
 
 class Checkpoint(Callback):
-	def __init__(self, path, prod_model):
+	def __init__(self, path):
 		self.path = path
 		self.time = time.time()
 		self.time_quick = time.time()
-		self.prod_model = prod_model
 	def on_epoch_end(self, acc, loss):
 		self.model.reset_states()
 		print('States cleared')
@@ -50,16 +49,15 @@ class Checkpoint(Callback):
 	def on_batch_end(self, batch, logs={}):
 		elapsed = math.floor(time.time() - self.time)
 		elapsed_quick = math.floor(time.time() - self.time_quick)
-		self.prod_model.set_weights(self.model.get_weights())
-		self.prod_model.save('{}'.format(self.path))
+		self.model.save('{}'.format(self.path))
 
 		if elapsed_quick > 10:
-			self.prod_model.save('{}'.format(self.path))
+			self.model.save('{}'.format(self.path))
 			self.time_quick = time.time()
 		if elapsed > 1600: # save every 30 minutes
 			self.time = time.time()
 			# transfer training weights to saved model
-			self.prod_model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
+			self.model.save('{}.{:05d}-{:05d}.h5'.format(self.path,self.epoch,batch))
 
 def char_to_value(char):
     return char_to_int[char]
@@ -127,8 +125,9 @@ def create_model(internal_size,model_depth, batch_size,seq_len):
 	model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 	return model
 
-def play(model_path, seed, length):
-	model = load_model(model_path)
+def play(model_path, seed, length, internal_size, model_depth):
+	model_train = load_model(model_path)
+	model = create_model(internal_size,model_depth, 1,1)
 
 	words = ''.join([s for s in seed if s in char_to_int]) # start with a capital letter
 	for c in seed[:-1]:
@@ -155,16 +154,11 @@ def train(model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_l
 		parser.error('training data required')
 	data_path = get_file(data_path)
 
-	# also create prod_model with batch size 1 for production
 	if not reset and os.path.exists(model_path):
 		# get weights from saved model and apply to newly created model
-		weights = load_model(model_path).get_weights()
-		model = create_model(internal_size,model_depth, batch_size,sequence_length)
-		prod_model = create_model(internal_size,model_depth, 1, 1)
-		model.set_weights(weights)
+		model = load_model(model_path)
 	else:
 		model = create_model(internal_size,model_depth, batch_size,sequence_length)
-		prod_model = create_model(internal_size,model_depth, 1, 1)
 
 	size = get_file_size(data_path)
 	max_epoch = math.floor(size / sequence_length / batch_size)
@@ -176,7 +170,7 @@ def train(model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_l
 		os.remove(f)
 
 	# instantiate checkpoint callback
-	saver = Checkpoint(model_path,prod_model)
+	saver = Checkpoint(model_path)
 	model.fit_generator(data_generator(data_path,batch_size, sequence_length),
 		steps_per_epoch=steps_per_epoch, 
 		shuffle=False, 
@@ -200,7 +194,7 @@ def _main(args):
 	if 'train' == args.command:
 		train(model_path, data_path, steps_per_epoch, epochs, batch_size, sequence_length, internal_size, model_depth, args.reset)
 	elif 'play' == args.command:
-		play(model_path, args.seed, args.length)
+		play(model_path, args.seed, args.length, internal_size, model_depth)
 
 	return 0
 
